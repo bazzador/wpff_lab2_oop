@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices.WindowsRuntime;
 using System.Runtime.Remoting.Channels;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -21,260 +24,402 @@ namespace wpff_lab2_oop
     /// </summary>
     public partial class MainWindow : Window
     {
-        private Calculator calc; // Поле класу
+        private Calculator calc;
+        private Command comm;
         private string previous;
-        private Dictionary<string, bool> validOperators = new Dictionary<string, bool>()
+        private bool scienceMode = false;
+        private char[] validOperators = new char[]
         {
-            {"+", true},
-            {"-", true},
-            {"×", true},
-            {"÷", true}  
+            '+',
+            '-',
+            '×',
+            '÷'
         };
+        public Dictionary<string, double> Pi = new Dictionary<string, double>()
+        {
+            { "π", Math.PI }
+        };
+        private string input;
         private bool isPrev = false;
-        private Receiver rec_;
+        public delegate void delErase();
+        public bool isScienceMode = false;
         public MainWindow()
         {
             InitializeComponent();
-            //rec_ = new Receiver();
             calc = new Calculator();
         }
         private void Button_Click(object sender, RoutedEventArgs e)
         {
-            string name = (string)((Button)e.OriginalSource).Content;
+            input = (string)((Button)e.OriginalSource).Content;
 
-            if (name == "=")
+            if (input == ".")
             {
-                // Перевірка на наявність попередньої операції та числа
-                if (!string.IsNullOrEmpty(previous) && !string.IsNullOrEmpty(window.Text))
+                if (NormalizeDot())
+                    window.Text += input;
+            }
+
+            else if (input == "0" || input == "00")
+            {
+                if (NormalizeZero())
+                    window.Text += input;
+            }
+            else if (window.Text == "0")
+                window.Text = input;
+            else if (input == "π")
+            {
+                if(NormalizePI())
+                    window.Text += input;
+            }
+            else
+                window.Text += input;
+
+        }
+        private bool NormalizeZero()
+        {
+            if (window.Text.Length < 2)
+                return false;
+            return true;
+        }
+        private bool NormalizeDot()
+        {
+            for (int i = 0; i < window.Text.Length; i++)
+            {
+                if (window.Text[i] == '.')
+                    return false;
+            }
+            return true;
+        }
+        private bool NormalizePI()
+        {
+            for (int i = 0; i < window.Text.Length; i++)
+            {
+                if (window.Text[i] == 'π')
+                    return false;
+            }
+            return true;
+        }
+
+        private void Operation_Click(object sender, RoutedEventArgs e)
+        {
+            input = (string)((Button)e.OriginalSource).Content;
+            if (input == "=")
+            {
+                previous = Regex.Replace(previous, "π", Math.PI.ToString());
+                window.Text = Regex.Replace(window.Text, "π", Math.PI.ToString());
+                double.TryParse(window.Text, out double num);
+                calc.receiver_.Info = Convert.ToDouble(previous.Substring(0, previous.Length - 1));
+                switch (previous[previous.Length - 1])
                 {
-                    int num;
-                    if (int.TryParse(window.Text, out num))
+                    case '+':
+                        window.Text = Convert.ToString(calc.Add(num));
+                        break;
+                    case '-':
+                        window.Text = Convert.ToString(calc.Sub(num));
+                        break;
+                    case '×':
+                        window.Text = Convert.ToString(calc.Mul(num));
+                        break;
+                    case '÷':
+                        window.Text = Convert.ToString(calc.Div(num));
+                        break;
+                    case '^':
+                        window.Text = Convert.ToString(calc.Pow(num));
+                        break;
+                }
+                calc.PreviousCommand = previous + num;
+                window_2.Text = "";
+                previous = "";
+                isPrev = false;
+            }
+            else if (input == "e")
+            {
+                window.Text = Convert.ToString(calc.Exp(Convert.ToDouble(window.Text)));
+            }
+            else if (input == "√")
+            {
+                window.Text = Convert.ToString(calc.Sqrt(Convert.ToDouble(window.Text)));
+            }
+            else if (input == "ln")
+            {
+                window.Text = Convert.ToString(calc.Ln10(Convert.ToDouble(window.Text)));
+            }
+            else if (!isPrev)
+            {
+                previous = window.Text + input;
+                window_2.Text = previous;
+                window.Text = "0";
+                isPrev = true;
+            }
+
+        }
+
+        private void AdvanceOperations_Click(object sender, RoutedEventArgs e)
+        {
+            input = (string)((Button)e.OriginalSource).Content;
+            switch (input)
+            {
+                case "C":
+                    window.Text = calc.C();
+                    window_2.Text = "";
+                    isPrev = false;
+                    break;
+                case "CE":
+                    int b = -1;
+                    try
                     {
-                        // Виконання відповідної операції на основі попередньої операції та числа
-                        switch (previous)
+                        for (int i = 0; i < calc.PreviousCommand.Length; i++)
                         {
-                            case "+":
-                                window.Text = Convert.ToString(calc.Add(num));
-                                break;
-                            case "-":
-                                window.Text = Convert.ToString(calc.Sub(num));
-                                break;
-                            case "×":
-                                window.Text = Convert.ToString(calc.Mul(num));
-                                break;
-                            case "÷":
-                                window.Text = Convert.ToString(calc.Div(num));
-                                break;
+                            for (int j = 0; j < validOperators.Length; j++)
+                            {
+                                if (calc.PreviousCommand[i] == validOperators[j])
+                                {
+                                    b = i;
+                                    break;
+                                }
+                            }
                         }
-                        // Очистка попередньої операції
-                        previous = null;
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        MessageBox.Show("Введено нечислове значення!");
+                        MessageBox.Show("Попередня команда відсутня!");
                     }
-                }
-                else
-                {
-                    MessageBox.Show("Неможливо виконати операцію. Відсутнє число або оператор!");
-                }
+                    window_2.Text = calc.PreviousCommand.Substring(0, b + 1);
+                    window.Text = calc.PreviousCommand.Substring(b + 1, calc.PreviousCommand.Length - b - 1);
+                    previous = window_2.Text;
+                    break;
+                case "⌫":
+                    window.Text = calc.Erase();
+                    break;
+            }
+        }
+
+        private void ScienceMode_Click(object sender, RoutedEventArgs e)
+        {
+            if (!scienceMode)
+            {
+                main.Width += 200;
+                grid.Width += 200;
+                scienceMode = true;
+                pi.Visibility = Visibility.Visible;
+                exp.Visibility = Visibility.Visible;
+                sqrt.Visibility = Visibility.Visible;
+                pow.Visibility = Visibility.Visible;
+                ln.Visibility = Visibility.Visible;
             }
             else
             {
-                // Логіка для додавання цифри або оператора до вікна введення
-                if (isPrev)
-                {
-                    isPrev = false;
-                    window.Text = "";
-                }
-                if (validOperators.ContainsKey(name))
-                {
-                    window_2.Text = window.Text + name;
-                    previous = name;
-                    isPrev = true;
-                    calc.receiver_.Info = Convert.ToInt32(window.Text);
-                }
-                else
-                {
-                    window.Text += name;
-                }
+                main.Width -= 200;
+                grid.Width -= 200;
+                scienceMode = false;
+                pi.Visibility = Visibility.Collapsed;
+                exp.Visibility = Visibility.Collapsed;
+                sqrt.Visibility = Visibility.Collapsed;
+                pow.Visibility = Visibility.Collapsed;
+                ln.Visibility = Visibility.Collapsed;
             }
-            //string name = (string)((Button)e.OriginalSource).Content;
-            ////bool isNum = int.TryParse(name, out int num);
-            //if(name == "=")
+        }
+    }
+    class Receiver
+    {
+        public double Info;
+        public void Run(string operationCode, double operand)
+        {
+            switch (operationCode)
+            {
+                case "+":
+                    Info += operand;
+                    break;
+                case "-":
+                    Info -= operand;
+                    break;
+                case "*":
+                    Info *= operand;
+                    break;
+                case "/":
+                    Info /= operand;
+                    break;
+                case "^":
+                    Info = Math.Pow(Info, operand);
+                    break;
+                case "e":
+                    Info = Math.Exp(operand);
+                    break;
+                case "√":
+                    Info = Math.Sqrt(operand);
+                    break;
+                case "ln":
+                    Info = Math.Log10(operand);
+                    break;
+            }
+        }
+    }// логіка обрахування
+    class Invoker
+    {
+        private List<Command> commands = new List<Command>();
+        int curr = 0;
+        public void StoreComm(Command command)
+        {
+            commands.Add(command);
+        }
+        public void ExecuteComm()
+        {
+            commands[curr].Execute();
+            curr++;
+        }
+        public void Undo(int levels)
+        {
+            for (int i = 0; i < levels; i++)
+            {
+                if (curr > 0)
+                    commands[--curr].UnExecute();
+            }
+        }
+        public void Redo(int levels)
+        {
+            for (int i = 0; i < levels; i++)
+            {
+                if (curr < commands.Count - 1)
+                    commands[curr++].Execute();
+            }
+        }
+    }// збереження та откат команд + ініціалізація
+    abstract class Command
+    {
+        protected Receiver receiver_;
+        protected double operand_;
+        public Command(Receiver receiver)
+        {
+            receiver_ = receiver;
+        }
+        public abstract void Execute();
+        public abstract void UnExecute();
 
-            //if (isPrev)
-            //{
-            //    isPrev = false;
-            //    window.Text = "";
-            //}
-            //if (validOperators.ContainsKey(name))
-            //{
-            //   window_2.Text = window.Text + name;
-            //   previous = window.Text;
-            //   isPrev = true;
-            //}
-            //else window.Text += name;
-
-            //bool isNum = int.TryParse(name, out int num);
-            //if (!isNum)
-            //{
-            //    switch (name)
-            //    {
-            //        case "+":
-            //            previous = num;
-            //            if (previous != 0)
-            //            {
-            //                window.Text = Convert.ToString(calc.Add(previous) + calc.Add(num));
-            //            }
-            //            break;
-            //        case "-":
-            //            window.Text = Convert.ToString(calc.Sub(num));
-            //            break;
-            //        case "*":
-            //            window.Text = Convert.ToString(calc.Mul(num)); 
-            //            break;
-            //        case "/":
-            //            window.Text = Convert.ToString(calc.Div(num));
-            //            break;
-            //    }
-            //}
-            //else window.Text += name;
-
-
+    }
+    class Add : Command
+    {
+        public Add(Receiver receiver, double operand) : base(receiver)
+        {
+            receiver_ = receiver;
+            operand_ = operand;
         }
-        class Receiver
+        public override void Execute()
         {
-            public int Info;/*{  get; private set; }*/
-            public void Run(char operationCode, int operand) 
-            {
-                switch(operationCode)
-                {
-                    case '+':
-                        Info += operand;
-                        break;
-                    case '-':
-                        Info -= operand;
-                        break;
-                    case '*':
-                        Info *= operand;
-                        break;
-                    case '/':
-                        Info /= operand;
-                        break;
-                }
-            }
-            public void Action()
-            {
-                Console.WriteLine("Receiver");
-            }
-        }// логіка обрахування
-        class Invoker 
-        {
-            private List<Command> commands = new List<Command>();
-            int curr = 0;
-            public void StoreComm(Command command)
-            {
-                commands.Add(command);
-            }
-            public void ExecuteComm()
-            {
-                commands[curr].Execute();
-                curr++;
-            }
-            public void Undo(int levels)
-            {
-                for (int i = 0; i < levels; i++)
-                {
-                    if (curr > 0)
-                        commands[--curr].UnExecute();
-                }
-            }
-            public void Redo(int levels)
-            {
-                for (int i = 0; i < levels; i++)
-                {
-                    if (curr < commands.Count - 1)
-                        commands[curr++].Execute();
-                }
-            }
-        }// збереження та откат команд + ініціалізація
-        abstract class Command
-        {
-            protected Receiver receiver_;
-            protected int operand_;
-            public Command(Receiver receiver)
-            {
-                receiver_ = receiver;
-            }
-            public abstract void Execute();
-            public abstract void UnExecute();
+            receiver_.Run("+", operand_);
         }
-        class Add : Command
+        public override void UnExecute()
         {
-            public Add(Receiver receiver, int operand) : base(receiver)
-            {
-                receiver_ = receiver;
-                operand_ = operand; 
-            }
-            public override void Execute()
-            {
-                receiver_.Run('+', operand_);
-            }
-            public override void UnExecute()
-            {
-                receiver_.Run('-', operand_);
-            }
+            receiver_.Run("-", operand_);
         }
-        class Sub : Command
+    }
+    class Sub : Command
+    {
+        public Sub(Receiver receiver, double operand) : base(receiver)
         {
-            public Sub(Receiver receiver, int operand) : base(receiver)
-            {
-                receiver_ = receiver;
-                operand_ = operand;
-            }
-            public override void Execute()
-            {
-                receiver_.Run('-', operand_);
-            }
-            public override void UnExecute()
-            {
-                receiver_.Run('+', operand_);
-            }
+            receiver_ = receiver;
+            operand_ = operand;
         }
-        class Mul : Command
+        public override void Execute()
         {
-            public Mul(Receiver receiver, int operand) : base(receiver)
-            {
-                receiver_ = receiver;
-                operand_ = operand;
-            }
-            public override void Execute()
-            {
-                receiver_.Run('*', operand_);
-            }
-            public override void UnExecute()
-            {
-                receiver_.Run('/', operand_);
-            }
+            receiver_.Run("-", operand_);
         }
-        class Div : Command
+        public override void UnExecute()
         {
-            public Div(Receiver receiver, int operand) : base(receiver)
-            {
-                receiver_ = receiver;
-                operand_ = operand;
-            }
-            public override void Execute()
-            {
-                receiver_.Run('/', operand_);
-            }
-            public override void UnExecute()
-            {
-                receiver_.Run('*', operand_);
-            }
+            receiver_.Run("+", operand_);
         }
-        class Calculator
+    }
+    class Mul : Command
+    {
+        public Mul(Receiver receiver, double operand) : base(receiver)
+        {
+            receiver_ = receiver;
+            operand_ = operand;
+        }
+        public override void Execute()
+        {
+            receiver_.Run("*", operand_);
+        }
+        public override void UnExecute()
+        {
+            receiver_.Run("/", operand_);
+        }
+    }
+    class Div : Command
+    {
+        public Div(Receiver receiver, double operand) : base(receiver)
+        {
+            receiver_ = receiver;
+            operand_ = operand;
+        }
+        public override void Execute()
+        {
+            receiver_.Run("/", operand_);
+        }
+        public override void UnExecute()
+        {
+            receiver_.Run("*", operand_);
+        }
+    }
+    class Pow : Command
+    {
+        public Pow(Receiver receiver, double operand) : base(receiver)
+        {
+            receiver_ = receiver;
+            operand_ = operand;
+        }
+        public override void Execute()
+        {
+            receiver_.Run("^", operand_);
+        }
+        public override void UnExecute()
+        {
+        }
+    }
+    class Exp : Command
+    {
+        public Exp(Receiver receiver, double operand) : base(receiver)
+        {
+            receiver_ = receiver;
+            operand_ = operand;
+        }
+        public override void Execute()
+        {
+            receiver_.Run("e", operand_);
+        }
+        public override void UnExecute()
+        {
+        }
+    }
+    class Sqrt : Command
+    {
+        public Sqrt(Receiver receiver, double operand) : base(receiver)
+        {
+            receiver_ = receiver;
+            operand_ = operand;
+        }
+        public override void Execute()
+        {
+            receiver_.Run("√", operand_);
+        }
+        public override void UnExecute()
+        {
+        }
+    }
+    class Ln10 : Command
+    {
+        public Ln10(Receiver receiver, double operand) : base(receiver)
+        {
+            receiver_ = receiver;
+            operand_ = operand;
+        }
+        public override void Execute()
+        {
+            receiver_.Run("ln", operand_);
+        }
+        public override void UnExecute()
+        {
+        }
+    }
+    class Calculator
         {
             public Receiver receiver_;
             Invoker invoker_;
@@ -289,38 +434,66 @@ namespace wpff_lab2_oop
                 receiver_.Info = receiver.Info;
                 invoker_ = new Invoker();
             }
-            private int Run(Command command)
+            private double Run(Command command)
             {
                 invoker_.StoreComm(command);
                 invoker_.ExecuteComm();
                 return receiver_.Info;
             }
-            public int Add(int operand)
+            public double Add(double operand)
             {
                 return Run(new Add(receiver_, operand));
             }
-            public int Sub(int operand)
+            public double Sub(double operand)
             {
                 return Run(new Sub(receiver_, operand));
             }
-            public int Mul(int operand)
+            public double Mul(double operand)
             {
                 return Run(new  Mul(receiver_, operand)); 
             }
-            public int Div(int operand)
+            public double Div(double operand)
             {
                 return Run(new Div(receiver_, operand));
             }
-            public int Undo(int levels)
+            public double Pow(double operand)
+            {
+                return Run(new Pow(receiver_, operand));
+            }
+            public double Exp(double operand)
+            {
+                return Run(new Exp(receiver_, operand));
+            }
+            public double Sqrt(double operand)
+            {
+                return Run(new Sqrt(receiver_, operand));
+            }
+            public double Ln10(double operand) 
+            {
+                return Run(new Ln10(receiver_, operand));
+            }
+            public double Undo(int levels)
             {
                 invoker_.Undo(levels);
                 return receiver_.Info;
             }
-            public int Redo(int levels)
+            public double Redo(int levels)
             {
                 invoker_.Redo(levels);
                 return receiver_.Info;
             }
+            public string C()
+            {
+                receiver_.Info = 0;
+                return "0";
+            }
+            public string Erase()
+            {
+                string erasedInfo = Convert.ToString(receiver_.Info);
+                erasedInfo.Substring(0, erasedInfo.Length - 1);
+                receiver_.Info = Convert.ToDouble(erasedInfo);
+                return erasedInfo;
+            }
+            public string PreviousCommand { get; set;}
         }
     }
-}
